@@ -121,10 +121,17 @@ export default function Dashboard() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis hide />
+              <YAxis 
+                tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`} 
+                stroke="#64748b" 
+                fontSize={10} 
+                tickLine={false} 
+                axisLine={false} 
+               />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                 itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
+                formatter={(value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)}
               />
               <Area type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValor)" />
             </AreaChart>
