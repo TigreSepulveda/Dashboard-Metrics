@@ -12,7 +12,7 @@ export default function Dashboard() {
       .then(res => res.text())
       .then(csv => {
         const lineas = csv.split('\n');
-        const buscar = (txt) => {
+        const buscar = (txt: string) => {
           const f = lineas.find(l => l.includes(txt));
           if (!f) return "0";
           const col = f.split(',');
