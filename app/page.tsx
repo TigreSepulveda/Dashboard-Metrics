@@ -1,22 +1,24 @@
 'use client';
 import { useEffect, useState } from 'react';
+// Importamos solo lo que necesitamos de la librería que acabas de instalar
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
+  // --- EL "ESTADO" (La memoria de tu Dashboard) ---
   const [datosCompletos, setDatosCompletos] = useState<string[][]>([]);
   const [meses, setMeses] = useState<string[]>([]);
   const [mesSeleccionado, setMesSeleccionado] = useState('');
-  const [metricas, setMetricas] = useState({ arr: "...", profit: "...", billing: "..." });
+  const [metricas, setMetricas] = useState({ arr: "0", profit: "0", revenue: "0", expenses: "0", billing: "0", CashFlow: "0" });
+  const [datosGrafica, setDatosGrafica] = useState<any[]>([]);
 
+  const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pub?output=csv";
+
+  // --- EFECTO INICIAL (Se ejecuta UNA VEZ al abrir la página) ---
   useEffect(() => {
-    // URL integrada directamente
-    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pub?output=csv"; 
-
     fetch(url)
       .then(res => res.text())
-      .then(csv => {
-        if (csv.trim().startsWith("<!DOCTYPE")) return;
-
-        // Función avanzada para separar por comas ignorando las que están dentro de comillas (millones)
+      .then((csv: string) => {
+        // Función para procesar el texto de Google Sheets
         const procesarLineaCSV = (linea: string) => {
           const resultado = [];
           let celda = '';
@@ -31,39 +33,59 @@ export default function Dashboard() {
           resultado.push(celda.trim());
           return resultado;
         };
+const listaMeses = filas[0].filter(c => {
+  // Verificamos que tenga formato Mes-Año (ej: Jan-2025)
+  const esFecha = /^[A-Z][a-z]{2}-\d{4}$/.test(c);
+  if (!esFecha) return false;
 
+  // Extraemos el año (los últimos 4 dígitos)
+  const año = parseInt(c.split('-')[1]);
+  
+  // Solo dejamos pasar los de 2025 en adelante
+  return año >= 2025;
+});
         const filas = csv.split('\n').map(procesarLineaCSV);
         setDatosCompletos(filas);
 
-        // Identificar meses en la fila 1 (formato MMM-YYYY)
-        const listaMeses = filas[0].filter(c => /^[A-Z][a-z]{2}-\d{4}$/.test(c));
+        // Detectamos los meses en la fila 1
         
         if (listaMeses.length > 0) {
           setMeses(listaMeses);
-          setMesSeleccionado(listaMeses[listaMeses.length - 1]); // Selecciona el mes más reciente (Jan-2026)
+          setMesSeleccionado(listaMeses[listaMeses.length - 1]);
+          
+          // --- LÓGICA DE LA GRÁFICA ---
+          // Buscamos la fila de ARR para crear el historial
+          const filaARR = filas.find(f => f.some(c => c === "Actual ARR"));
+          if (filaARR) {
+            const history = listaMeses.map(mes => {
+              const idx = filas[0].indexOf(mes);
+              return {
+                name: mes,
+                valor: parseFloat(filaARR[idx]?.replace(/[致"$]/g, '').replace(/,/g, '') || "0")
+              };
+            });
+            setDatosGrafica(history); // Guardamos el historial en la memoria
+          }
         }
       });
   }, []);
 
+  // --- EFECTO DE ACTUALIZACIÓN (Se ejecuta cada vez que cambias el mes) ---
   useEffect(() => {
     if (datosCompletos.length > 0 && mesSeleccionado) {
       const indiceColumna = datosCompletos[0].indexOf(mesSeleccionado);
-      
-      const buscarValor = (nombre: string) => {
-        // Buscamos la fila que contiene el nombre exacto de la métrica
-        const fila = datosCompletos.find(f => f.some(c => c === nombre));
-        if (fila && indiceColumna !== -1) {
-          let val = fila[indiceColumna] || "0";
-          // Limpiamos símbolos y comas para que sea un número procesable
-          return val.replace(/[致"$]/g, '').replace(/,/g, '');
-        }
-        return "0";
+      const buscar = (nom: string) => {
+        const f = datosCompletos.find(fil => fil.some(c => c === nom));
+        return (f && indiceColumna !== -1) ? f[indiceColumna].replace(/[致"$]/g, '').replace(/,/g, '') : "0";
       };
 
       setMetricas({
-        arr: buscarValor("Actual ARR"),
-        profit: buscarValor("Net Profit P&L"),
-        billing: buscarValor("Total Billing")
+        arr: buscar("Actual ARR"),
+        profit: buscar("Net Profit P&L"),
+        revenue: buscar("Total Revenue P&L"),
+        expenses: buscar("Total Expenses P&L"),
+        billing: buscar("Total Billing"),
+        CashFlow: buscar("Total Cash")
       });
     }
   }, [mesSeleccionado, datosCompletos]);
@@ -72,59 +94,63 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-950 text-white p-8 font-sans">
       <div className="max-w-6xl mx-auto">
         
-        {/* Header Interactivo */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6 bg-slate-900/40 p-8 rounded-[2.5rem] border border-slate-800 backdrop-blur-md">
-          <div>
-            <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-emerald-400 to-blue-500 uppercase italic">
-              Financial Board
-            </h1>
-            <p className="text-slate-500 font-bold text-xs tracking-widest mt-2 uppercase">Live Sync Mode • Google Sheets</p>
-          </div>
-
-          <div className="bg-slate-800 p-2 rounded-2xl border border-slate-700">
-            <select 
-              value={mesSeleccionado} 
-              onChange={(e) => setMesSeleccionado(e.target.value)}
-              className="bg-transparent text-blue-400 font-black px-4 py-2 outline-none cursor-pointer text-lg"
-            >
-              {meses.map(m => <option key={m} value={m} className="bg-slate-900 text-white">{m}</option>)}
-            </select>
-          </div>
+        {/* Header con Selector */}
+        <div className="flex justify-between items-center mb-10 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
+          <h1 className="text-2xl font-black text-blue-400 italic tracking-tighter uppercase">Financial Analytics</h1>
+          <select 
+            value={mesSeleccionado} 
+            onChange={(e) => setMesSeleccionado(e.target.value)}
+            className="bg-slate-800 text-white p-2 rounded-xl outline-none border border-slate-700 font-bold cursor-pointer"
+          >
+            {meses.map(m => <option key={m} value={m} className="bg-slate-900">{m}</option>)}
+          </select>
         </div>
 
         {/* Tarjetas de Métricas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <Card title="Actual ARR" value={metricas.arr} color="blue" />
-          <Card title="Net Profit P&L" value={metricas.profit} color="emerald" />
-          <Card title="Total Billing" value={metricas.billing} color="purple" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <Card title="Actual ARR" value={metricas.arr} color="#3b82f6" />
+          <Card title="Net Profit" value={metricas.profit} color="#10b981" />
+          <Card title="Total Revenue" value={metricas.revenue} color="#f59e0b" />
+          <Card title="Total Expenses" value={metricas.expenses} color="#ef4444" />
+          <Card title="Cash Flow" value={metricas.CashFlow} color="#8b5cf6" />
         </div>
 
-        <p className="text-center mt-12 text-slate-700 text-[10px] font-black uppercase tracking-[0.3em]">
-          Data Source: Altsore Financial Master Copy
-        </p>
+        {/* --- LA GRÁFICA (Visualización de datos) --- */}
+        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl h-[400px]">
+          <h2 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-8">Tendencia Histórica: Actual ARR</h2>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={datosGrafica}>
+              <defs>
+                <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis hide />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
+                itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
+              />
+              <Area type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValor)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
       </div>
     </div>
   );
 }
 
+// Componente reutilizable para no repetir código (Principios DRY: Don't Repeat Yourself)
 function Card({ title, value, color }: { title: string, value: string, color: string }) {
-  const styles: any = { 
-    blue: "border-blue-500/30 text-blue-400 shadow-blue-500/5", 
-    emerald: "border-emerald-500/30 text-emerald-400 shadow-emerald-500/5", 
-    purple: "border-purple-500/30 text-purple-400 shadow-purple-500/5" 
-  };
-  
   const num = parseFloat(value);
-  const formatted = isNaN(num) ? value : new Intl.NumberFormat('en-US', { 
-    style: 'currency', 
-    currency: 'USD', 
-    maximumFractionDigits: 0 
-  }).format(num);
-
+  const formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   return (
-    <div className={`bg-slate-900 p-10 rounded-[2.5rem] border-2 ${styles[color]} shadow-2xl transition-all hover:scale-[1.03] hover:bg-slate-800/50`}>
-      <p className="text-[11px] font-black uppercase tracking-[0.25em] mb-6 opacity-40">{title}</p>
-      <p className="text-4xl md:text-5xl font-mono font-bold tracking-tighter">{formatted}</p>
+    <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 shadow-xl transition-all hover:border-slate-700">
+      <p className="text-[10px] font-black uppercase tracking-widest mb-4 opacity-40" style={{ color }}>{title}</p>
+      <p className="text-3xl font-mono font-bold tracking-tighter">{formatted}</p>
     </div>
   );
 }
