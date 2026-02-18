@@ -16,6 +16,25 @@ export default function Dashboard() {
   const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pub?output=csv";
   const urlRevenue = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxFLJDBn9OGXIL70MKffdHa0uOhqJYjSdaEi0a6nIQOwPuxiXM8ah3fo568J-1pTLtn8m9celQ5hx8/pub?output=csv";
 
+  // Función mágica para que Jan-2026 y ene-2026 sean lo mismo
+  const normalizarMes = (mes: string) => {
+    if (!mes) return "";
+    const m = mes.toLowerCase().trim();
+    if (m.includes('ene') || m.includes('jan')) return 'Jan' + m.slice(-5);
+    if (m.includes('feb')) return 'Feb' + m.slice(-5);
+    if (m.includes('mar')) return 'Mar' + m.slice(-5);
+    if (m.includes('abr') || m.includes('apr')) return 'Apr' + m.slice(-5);
+    if (m.includes('may')) return 'May' + m.slice(-5);
+    if (m.includes('jun')) return 'Jun' + m.slice(-5);
+    if (m.includes('jul')) return 'Jul' + m.slice(-5);
+    if (m.includes('ago') || m.includes('aug')) return 'Aug' + m.slice(-5);
+    if (m.includes('sep')) return 'Sep' + m.slice(-5);
+    if (m.includes('oct')) return 'Oct' + m.slice(-5);
+    if (m.includes('nov')) return 'Nov' + m.slice(-5);
+    if (m.includes('dic') || m.includes('dec')) return 'Dec' + m.slice(-5);
+    return mes;
+  };
+
   useEffect(() => {
     const procesarLineaCSV = (linea: string) => {
       const resultado = [];
@@ -42,21 +61,22 @@ export default function Dashboard() {
       setDatosCompletos(filasFin);
       setDatosRevenue(filasRev);
 
-      // Restauramos la detección de meses original (AB a AM son índices 27 a 38)
+      // Extraemos meses de la hoja de Revenue (AB a AM)
       const cabeceraRev = filasRev[0];
-      const listaMeses = cabeceraRev.slice(27, 39).filter(m => m !== "" && m !== undefined);
+      const listaMesesOriginales = cabeceraRev.slice(27, 39).filter(m => m !== "");
       
-      if (listaMeses.length > 0) {
-        setMeses(listaMeses);
-        setMesSeleccionado(listaMeses[0]);
+      if (listaMesesOriginales.length > 0) {
+        setMeses(listaMesesOriginales);
+        setMesSeleccionado(listaMesesOriginales[0]);
         
         const filaARR = filasFin.find(f => f.some(c => c === "Actual ARR"));
         if (filaARR) {
-          const history = listaMeses.map(mes => {
-            const idx = filasFin[0].indexOf(mes);
+          const history = listaMesesOriginales.map(mes => {
+            // Buscamos el mes en la hoja de Finanzas normalizando ambos
+            const idx = filasFin[0].findIndex(m => normalizarMes(m) === normalizarMes(mes));
             return {
               name: mes,
-              valor: parseFloat(filaARR[idx]?.replace(/[致"$]/g, '').replace(/,/g, '') || "0")
+              valor: idx !== -1 ? parseFloat(filaARR[idx]?.replace(/[致"$]/g, '').replace(/,/g, '') || "0") : 0
             };
           });
           setDatosGrafica(history);
@@ -67,7 +87,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (datosCompletos.length > 0 && mesSeleccionado) {
-      const indiceColumna = datosCompletos[0].indexOf(mesSeleccionado);
+      // Buscamos la columna del mes usando normalización
+      const indiceColumna = datosCompletos[0].findIndex(m => normalizarMes(m) === normalizarMes(mesSeleccionado));
+      
       const buscar = (nom: string) => {
         const f = datosCompletos.find(fil => fil.some(c => c === nom));
         return (f && indiceColumna !== -1) ? f[indiceColumna].replace(/[致"$]/g, '').replace(/,/g, '') : "0";
@@ -88,40 +110,36 @@ export default function Dashboard() {
   const tiposUnicos = ["Todos", ...Array.from(new Set(datosRevenue.slice(1).map(f => f[14]).filter(t => t)))];
 
   const obtenerDatosFiltrados = () => {
-    // Índices seguros para evitar errores de TypeScript
     const idxMes = datosRevenue.length > 0 ? datosRevenue[0].indexOf(mesSeleccionado) : -1;
     const idxMeta = 40; 
 
-    if (idxMes === -1) return { filasFiltradas: [], totalActual: 0, totalMeta: 0, idxM: 0, idxA: 40 };
+    if (idxMes === -1) return { filtradas: [], totalA: 0, totalM: 0, iM: 0, iA: 40 };
 
     let filtradas = datosRevenue.slice(1).filter(f => f[idxMes] && f[idxMes] !== "0" && f[idxMes] !== "");
-    
-    if (tipoSeleccionado !== "Todos") {
-      filtradas = filtradas.filter(f => f[14] === tipoSeleccionado);
-    }
+    if (tipoSeleccionado !== "Todos") filtradas = filtradas.filter(f => f[14] === tipoSeleccionado);
 
-    const totalActual = filtradas.reduce((acc, f) => acc + parseFloat(f[idxMes]?.replace(/[^0-9.-]/g, '') || "0"), 0);
-    const totalMeta = filtradas.reduce((acc, f) => acc + parseFloat(f[idxMeta]?.replace(/[^0-9.-]/g, '') || "0"), 0);
+    const totalA = filtradas.reduce((acc, f) => acc + parseFloat(f[idxMes]?.replace(/[^0-9.-]/g, '') || "0"), 0);
+    const totalM = filtradas.reduce((acc, f) => acc + parseFloat(f[idxMeta]?.replace(/[^0-9.-]/g, '') || "0"), 0);
 
-    return { filasFiltradas: filtradas, totalActual, totalMeta, idxM: idxMes, idxA: idxMeta };
+    return { filtradas, totalA, totalM, iM: idxMes, iA: idxMeta };
   };
 
-  const { filasFiltradas, totalActual, totalMeta, idxM, idxA } = obtenerDatosFiltrados();
+  const { filtradas, totalA, totalM, iM, iA } = obtenerDatosFiltrados();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8 font-sans">
+    <div className="min-h-screen bg-[#050505] text-white p-8 font-sans">
       <div className="max-w-6xl mx-auto">
         
         {/* Header */}
-        <div className="flex justify-between items-center mb-10 bg-slate-900/50 p-6 rounded-3xl border border-slate-800">
-          <h1 className="text-2xl font-black text-blue-400 italic uppercase">Financial Analytics</h1>
+        <div className="flex justify-between items-center mb-10 bg-slate-900/30 p-6 rounded-3xl border border-white/5 backdrop-blur-xl">
+          <h1 className="text-2xl font-black text-blue-400 italic tracking-tighter uppercase">Financial Analytics</h1>
           <select value={mesSeleccionado} onChange={(e) => setMesSeleccionado(e.target.value)} className="bg-slate-800 p-2 rounded-xl border border-slate-700 font-bold">
             {meses.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
 
         {/* Tarjetas Principales */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-center">
           <Card title="Actual ARR" value={metricas.arr} color="#3b82f6" />
           <Card title="Net Profit" value={metricas.profit} color="#10b981" />
           <Card title="Total Revenue" value={metricas.revenue} color="#f59e0b" />
@@ -131,11 +149,11 @@ export default function Dashboard() {
         </div>
 
         {/* Gráfica de Tendencia */}
-        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-800 h-[400px] mb-12 shadow-2xl">
-          <h2 className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-8 text-center italic">Tendencia Histórica: Actual ARR</h2>
+        <div className="bg-slate-900/20 p-8 rounded-[2.5rem] border border-white/5 h-[400px] mb-12 shadow-2xl">
+          <h2 className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-8 text-center">Tendencia Histórica: Actual ARR</h2>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={datosGrafica}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
               <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis hide />
               <Tooltip 
@@ -148,9 +166,9 @@ export default function Dashboard() {
         </div>
 
         {/* REVENUE BY TYPE */}
-        <div className="bg-slate-900/50 p-10 rounded-[3rem] border border-slate-800 shadow-2xl">
-          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
-            <h2 className="text-white text-lg font-black uppercase italic tracking-tighter">Revenue Detail by Type</h2>
+        <div className="bg-slate-900/30 p-10 rounded-[3rem] border border-white/5">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+            <h2 className="text-white text-lg font-black uppercase italic tracking-tighter italic">Revenue Detail by Type</h2>
             <div className="w-full md:w-64">
               <p className="text-[10px] font-black uppercase text-pink-500 mb-2">Filtrar por Type (Columna O)</p>
               <select value={tipoSeleccionado} onChange={(e) => setTipoSeleccionado(e.target.value)} className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-pink-400 font-bold outline-none">
@@ -159,41 +177,37 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-center md:text-left">
-            <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700">
-              <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Total Actual ({tipoSeleccionado})</p>
-              <p className="text-3xl font-mono font-bold text-blue-400">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalActual)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+            <div className="bg-slate-800/20 p-6 rounded-2xl border border-white/5">
+              <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Total Actual</p>
+              <p className="text-3xl font-mono font-bold text-blue-400">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalA)}</p>
             </div>
-            <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700">
+            <div className="bg-slate-800/20 p-6 rounded-2xl border border-white/5">
               <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Total Budget (AO)</p>
-              <p className="text-3xl font-mono font-bold text-slate-400">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalMeta)}</p>
+              <p className="text-3xl font-mono font-bold text-slate-400">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalM)}</p>
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="text-slate-500 text-[11px] font-black uppercase border-b border-slate-800">
+                <tr className="text-slate-500 text-[11px] font-black uppercase border-b border-white/5">
                   <th className="pb-4">Cliente (B)</th>
                   <th className="pb-4">Type (O)</th>
                   <th className="pb-4 text-right">Actual</th>
-                  <th className="pb-4 text-right">Budget (AO)</th>
+                  <th className="pb-4 text-right text-slate-600">Budget (AO)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/40">
-                {filasFiltradas.map((f, i) => (
-                  <tr key={i} className="hover:bg-slate-800/20 transition-all">
-                    <td className="py-4 font-bold">{f[1]}</td>
-                    <td className="py-4">
-                      <span className="bg-pink-500/10 text-pink-400 px-2 py-1 rounded text-[10px] font-bold">
-                        {f[14]}
-                      </span>
+              <tbody className="divide-y divide-white/5">
+                {filtradas.map((f, i) => (
+                  <tr key={i} className="hover:bg-white/5 transition-all">
+                    <td className="py-5 font-bold">{f[1]}</td>
+                    <td className="py-5"><span className="text-pink-400/80 text-[10px] font-bold border border-pink-500/20 px-2 py-1 rounded">{f[14]}</span></td>
+                    <td className="py-5 text-right font-mono font-bold text-blue-400">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[iM]?.replace(/[^0-9.-]/g, '') || 0))}
                     </td>
-                    <td className="py-4 text-right font-mono font-bold text-blue-400">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[idxM]?.replace(/[^0-9.-]/g, '') || 0))}
-                    </td>
-                    <td className="py-4 text-right font-mono text-slate-500">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[idxA]?.replace(/[^0-9.-]/g, '') || 0))}
+                    <td className="py-5 text-right font-mono text-slate-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[iA]?.replace(/[^0-9.-]/g, '') || 0))}
                     </td>
                   </tr>
                 ))}
@@ -210,9 +224,9 @@ function Card({ title, value, color }: { title: string, value: string, color: st
   const num = parseFloat(value);
   const formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   return (
-    <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 shadow-xl" style={{ borderTop: `4px solid ${color}` }}>
+    <div className="bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 shadow-xl transition-all hover:scale-[1.02]" style={{ borderTop: `2px solid ${color}` }}>
       <p className="text-[10px] font-black uppercase tracking-widest mb-3 opacity-40" style={{ color }}>{title}</p>
-      <p className="text-3xl font-mono font-bold">{formatted}</p>
+      <p className="text-3xl font-mono font-bold tracking-tighter">{formatted}</p>
     </div>
   );
 }
