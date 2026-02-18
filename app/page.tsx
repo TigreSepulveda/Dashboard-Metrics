@@ -128,4 +128,3 @@ function Card({ title, value, color }: { title: string, value: string, color: st
     </div>
   );
 }
-}
