@@ -9,7 +9,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     // 1. REEMPLAZA CON TU LINK CSV (Asegúrate que termine en /pub?output=csv)
-    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pubhtml"; 
+    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pub?output=csv"; 
 
     fetch(url)
       .then(res => res.text())
