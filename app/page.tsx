@@ -16,6 +16,7 @@ export default function Dashboard() {
   const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRi564nAqRM4F8wP9q5chBqEWl5LhGd9fV-KQltyJEOd0aL7mtbLHxiOpCswULwFfty7OAIUEB3Q4lR/pub?output=csv";
   const urlRevenue = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxFLJDBn9OGXIL70MKffdHa0uOhqJYjSdaEi0a6nIQOwPuxiXM8ah3fo568J-1pTLtn8m9celQ5hx8/pub?output=csv";
 
+  // --- CARGA INICIAL DE DATOS ---
   useEffect(() => {
     const procesarCSV = (csv: string) => {
       return csv.split('\n').map(l => {
@@ -38,36 +39,40 @@ export default function Dashboard() {
       setDatosCompletos(fFin);
       setDatosRevenue(fRev);
 
-      // --- FILTRO DE MESES 2025 EN ADELANTE ---
-      // Leemos la fila 0 de la primera hoja
+      // FILTRO DE MESES FORMATO "3/1/2026"
       const listaMeses = fFin[0].filter(c => {
-        const esFecha = /^[A-Z][a-z]{2}-\d{4}$/.test(c);
-        if (!esFecha) return false;
-        const año = parseInt(c.split('-')[1]);
-        return año >= 2025; // Solo 2025 en adelante
+        const esFechaNumerica = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(c.trim());
+        if (!esFechaNumerica) return false;
+        const partes = c.split('/');
+        const año = parseInt(partes[partes.length - 1]);
+        return año >= 2025;
       });
       
       if (listaMeses.length > 0) {
         setMeses(listaMeses);
-        setMesSeleccionado(listaMeses[listaMeses.length - 1]); // Seleccionamos el último disponible
+        setMesSeleccionado(listaMeses[listaMeses.length - 1]);
 
-        const filaARR = fFin.find(f => f.some(c => c === "Actual ARR"));
+        const filaARR = fFin.find(f => f[0]?.trim() === "Actual ARR");
         if (filaARR) {
           setDatosGrafica(listaMeses.map(mes => {
             const idx = fFin[0].indexOf(mes);
-            return { name: mes, valor: parseFloat(filaARR[idx]?.replace(/[致"$]/g, '').replace(/,/g, '') || "0") };
+            return { 
+              name: mes, 
+              valor: parseFloat(filaARR[idx]?.replace(/[^0-9.-]/g, '') || "0") 
+            };
           }));
         }
       }
     });
   }, []);
 
+  // --- ACTUALIZACIÓN DE MÉTRICAS CUANDO CAMBIA EL MES ---
   useEffect(() => {
     if (datosCompletos.length > 0 && mesSeleccionado) {
       const idxCol = datosCompletos[0].indexOf(mesSeleccionado);
       const buscar = (nom: string) => {
-        const fila = datosCompletos.find(f => f.some(c => c === nom));
-        return (fila && idxCol !== -1) ? fila[idxCol].replace(/[致"$]/g, '').replace(/,/g, '') : "0";
+        const fila = datosCompletos.find(f => f[0]?.trim() === nom);
+        return (fila && idxCol !== -1) ? fila[idxCol].replace(/[^0-9.-]/g, '') : "0";
       };
 
       setMetricas({
@@ -81,13 +86,11 @@ export default function Dashboard() {
     }
   }, [mesSeleccionado, datosCompletos]);
 
-  // --- LÓGICA DE LA HOJA REVENUE (CON FILA 3) ---
+  // --- LÓGICA DE LA TABLA REVENUE ---
   const tiposUnicos = ["Todos", ...Array.from(new Set(datosRevenue.slice(3).map(f => f[14]).filter(t => t)))];
-  
-  // Buscamos el índice del mes en la FILA 3 (índice 2) de la hoja de Revenue
   const filaCabeceraRevenue = datosRevenue.length > 2 ? datosRevenue[2] : [];
   const idxM = filaCabeceraRevenue.indexOf(mesSeleccionado);
-  const idxA = 40; // Columna AO (Meta)
+  const idxA = 40; // Columna AO
 
   let filtradas = (idxM !== -1) 
     ? datosRevenue.slice(3).filter(f => f[idxM] && f[idxM] !== "0" && f[idxM] !== "") 
@@ -104,15 +107,19 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#050505] text-white p-8">
       <div className="max-w-6xl mx-auto">
         
-        {/* Header - Con filtro 2025+ activo */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-10 bg-slate-900/40 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
           <h1 className="text-2xl font-black text-blue-400 italic uppercase">Financial Board</h1>
-          <select value={mesSeleccionado} onChange={(e) => setMesSeleccionado(e.target.value)} className="bg-slate-800 p-2 rounded-xl border border-slate-700 font-bold outline-none cursor-pointer">
+          <select 
+            value={mesSeleccionado} 
+            onChange={(e) => setMesSeleccionado(e.target.value)} 
+            className="bg-slate-800 p-2 rounded-xl border border-slate-700 font-bold outline-none cursor-pointer"
+          >
             {meses.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
 
-        {/* Tarjetas Principales */}
+        {/* Tarjetas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <Card title="Actual ARR" value={metricas.arr} color="#3b82f6" />
           <Card title="Net Profit" value={metricas.profit} color="#10b981" />
@@ -122,7 +129,7 @@ export default function Dashboard() {
           <Card title="Cash Flow" value={metricas.CashFlow} color="#8b5cf6" />
         </div>
 
-        {/* Gráfica ARR (Sincronizada con 2025+) */}
+        {/* Gráfica */}
         <div className="bg-slate-900/20 p-8 rounded-[2.5rem] border border-white/5 h-[400px] mb-12 shadow-2xl">
           <h2 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-8 text-center italic">ARR Trend (2025+)</h2>
           <ResponsiveContainer width="100%" height="100%">
@@ -139,11 +146,15 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Tabla Revenue (Leyendo fila 3 sincronizada) */}
+        {/* Tabla Revenue */}
         <div className="bg-slate-900/40 p-10 rounded-[3rem] border border-white/5">
           <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-            <h2 className="text-white text-lg font-black uppercase italic tracking-widest italic">Revenue Details</h2>
-            <select value={tipoSeleccionado} onChange={(e) => setTipoSeleccionado(e.target.value)} className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-pink-400 font-bold outline-none w-full md:w-64">
+            <h2 className="text-white text-lg font-black uppercase italic tracking-widest">Revenue Details</h2>
+            <select 
+              value={tipoSeleccionado} 
+              onChange={(e) => setTipoSeleccionado(e.target.value)} 
+              className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-pink-400 font-bold outline-none w-full md:w-64"
+            >
               {tiposUnicos.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -164,7 +175,7 @@ export default function Dashboard() {
               <thead>
                 <tr className="text-slate-600 text-[11px] font-black uppercase border-b border-white/5">
                   <th className="pb-4">Client</th>
-                  <th className="pb-4">Type (Col. O)</th>
+                  <th className="pb-4">Type</th>
                   <th className="pb-4 text-right">Actual</th>
                   <th className="pb-4 text-right">Budget (AO)</th>
                 </tr>
@@ -173,9 +184,13 @@ export default function Dashboard() {
                 {filtradas.map((f, i) => (
                   <tr key={i} className="hover:bg-white/5 transition-all">
                     <td className="py-5 font-bold text-slate-200">{f[1]}</td>
-                    <td className="py-5"><span className="text-pink-400/80 text-[10px] font-bold border border-pink-500/20 px-2 py-1 rounded-md">{f[14]}</span></td>
+                    <td className="py-5">
+                      <span className="text-pink-400/80 text-[10px] font-bold border border-pink-500/20 px-2 py-1 rounded-md">
+                        {f[14]}
+                      </span>
+                    </td>
                     <td className="py-5 text-right font-mono font-bold text-blue-400">
-                      {idxM !== -1 && new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[idxM]?.replace(/[^0-9.-]/g, '') || 0))}
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[idxM]?.replace(/[^0-9.-]/g, '') || 0))}
                     </td>
                     <td className="py-5 text-right font-mono text-slate-600">
                       {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(f[idxA]?.replace(/[^0-9.-]/g, '') || 0))}
