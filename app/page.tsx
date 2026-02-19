@@ -47,21 +47,28 @@ export default function Dashboard() {
         const filasKPI = textoKPI.split('\n').map(procesarLineaCSV);
         setDatosKPIs(filasKPI);
 
-        // Configurar meses y gráfica
-        const listaMeses = filasKPI[0].filter(c => /^[A-Z][a-z]{2}-\d{4}$/.test(c));
-        if (listaMeses.length > 0) {
-          setMeses(listaMeses);
-          const ultimoMes = listaMeses[listaMeses.length - 1];
-          setMesSeleccionado(ultimoMes);
-          
-          const filaARR = filasKPI.find(f => f.some(c => c === "Actual ARR"));
-          if (filaARR) {
-            setDatosGrafica(listaMeses.map(mes => ({
-              name: mes,
-              valor: parseFloat(limpiarValor(filaARR[filasKPI[0].indexOf(mes)]))
-            })));
-          }
-        }
+        // 1. FILTRAR MESES: Agregamos la condición del año aquí
+const listaMeses = filasKPI[0].filter(c => {
+  const esFecha = /^[A-Z][a-z]{2}-\d{4}$/.test(c);
+  if (!esFecha) return false;
+  const año = parseInt(c.split('-')[1]);
+  return año === 2026; // <--- AQUÍ: Solo dejamos los de 2026
+});
+
+if (listaMeses.length > 0) {
+  setMeses(listaMeses);
+  // Seleccionamos el último mes de 2026 disponible
+  setMesSeleccionado(listaMeses[listaMeses.length - 1]);
+  
+  const filaARR = filasKPI.find(f => f.some(c => c === "Actual ARR"));
+  if (filaARR) {
+    // La gráfica automáticamente usará solo 2026 porque listaMeses ya está filtrada
+    setDatosGrafica(listaMeses.map(mes => ({
+      name: mes,
+      valor: parseFloat(limpiarValor(filaARR[filasKPI[0].indexOf(mes)]))
+    })));
+  }
+}
         // --- PASO 2: CARGAR REVENUE (Solo después de terminar KPIs) ---
         return fetch(urlRevenue);
       })
